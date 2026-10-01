@@ -164,7 +164,7 @@ function applyGenome(g){
 function startIndividual(inherit=true){
   evo.running=true;evo.fallen=false;evo.distance=0;evo.fallFrames=0;
   evo.vx=0;evo.vz=0;evo.fallAngle=0;evo.fallOmega=0;evo.gen++;
-  if(model){model.position.set(0,0,0);model.rotation.set(0,0,0);}
+  if(model){model.position.set(0,0,0);model.rotation.set(0,0,0);cameraFollowPos=model.position.clone();controls.target.set(0,0.92,0);}
   initGait(inherit&&evo.elite?evo.elite:null);
   updateEvoUI();
 }
@@ -228,7 +228,7 @@ scene.add(new THREE.HemisphereLight(0xffffff,0x667788,1.0));
 const dl=new THREE.DirectionalLight(0xffffff,0.9);dl.position.set(2,4,3);scene.add(dl);
 const floor=new THREE.Mesh(new THREE.CircleGeometry(1.1,48),new THREE.MeshBasicMaterial({color:0x8a979e,transparent:true,opacity:0.25}));
 floor.rotation.x=-Math.PI/2;scene.add(floor);
-const controls=new THREE.OrbitControls(camera,renderer.domElement);controls.target.set(0,0.92,0);controls.enableDamping=true;
+const controls=new THREE.OrbitControls(camera,renderer.domElement);controls.target.set(0,0.92,0);controls.enableDamping=true;controls.enableRotate=true;controls.enableZoom=true;controls.enablePan=true;controls.screenSpacePanning=true;let cameraFollowPos=null;
 function resize(){const w=view.clientWidth,h=view.clientHeight;renderer.setSize(w,h,false);camera.aspect=w/h;camera.updateProjectionMatrix()}
 new ResizeObserver(resize).observe(view);
 
@@ -407,7 +407,7 @@ function loop(now){
 
   const ph=physics();
 
-  if(evo.running && ph){
+  if(evo.running){
     /*
       簡易剛体力学:
       - 重力 F=mg
@@ -417,8 +417,10 @@ function loop(now){
         τ = r × F_g で倒れる角加速度を積分
       - 前進は歩行周期中の足の押し出しを小さな推進力として扱う
     */
-    const stable=ph.margin>=0;
-    const support=ph.pts.reduce((s,p)=>s+Math.max(0,p.f),0);
+    // 物理計算が有効なら支持状態を使う。読み込み直後などでまだ
+    // 重心計算ができないフレームは、歩行開始を止めない。
+    const stable=ph ? ph.margin>=0 : true;
+    const support=ph ? ph.pts.reduce((s,p)=>s+Math.max(0,p.f),0) : 1;
     const footLift=Math.max(0,Math.min(1,1-support));
     const gaitDrive=0.85 + 0.15*Math.sin(st.T*2*Math.PI*0.9);
     const maxFriction=evo.mu*evo.mass*evo.gravity;
@@ -439,7 +441,7 @@ function loop(now){
     evo.distance+=ds;
     if(model) model.position.z += ds*FZ;
 
-    if(!stable){
+    if(!stable && ph){
       // COMが支持領域から外れた距離を、転倒トルクの大きさとして扱う。
       const lever=Math.max(0.001,Math.abs(ph.margin));
       const torque=evo.mass*evo.gravity*lever;
@@ -467,11 +469,16 @@ function loop(now){
     // 物理計算された転倒角をモデルに反映。
     model.rotation.x += Math.min(0.025,evo.fallOmega*dt);
   }
-  // 3D空間を実際に進んでいるように、カメラもキャラクターへ追従させる。
+  // キャラクターが進んだ分だけカメラと注視点を同じ量だけ平行移動する。
+  // OrbitControlsそのものは常にユーザー操作可能なので、歩行中も自由に回転できる。
   if(model){
-    const z=model.position.z;
-    // カメラの位置・向きはユーザー操作を優先し、注視点だけキャラクターに追従させる。
-    controls.target.lerp(new THREE.Vector3(model.position.x,0.9,z+FZ*1.2),Math.min(1,6*dt));
+    if(!cameraFollowPos) cameraFollowPos=model.position.clone();
+    const delta=model.position.clone().sub(cameraFollowPos);
+    if(delta.lengthSq()>0){
+      camera.position.add(delta);
+      controls.target.add(delta);
+      cameraFollowPos.copy(model.position);
+    }
   }
 
   if(follow){const e=err/cnt;st.sum+=e;st.n++;
