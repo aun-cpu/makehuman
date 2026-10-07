@@ -1,126 +1,114 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>勉強タイマー</title>
-<link href="https://fonts.googleapis.com/css2?family=Zen+Kaku+Gothic+New:wght@400;700&display=swap" rel="stylesheet">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>試験タイマー</title>
 <style>
-:root{--bg:#e9eeec;--ink:#1b2a28;--sub:#5d6f6c;--line:#c6d2cf;--accent:#1d6b5a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
-@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121917;--ink:#e6efed;--sub:#93a7a3;--line:#2e3d3a;--accent:#6fd0b8}}
-:root[data-theme="dark"]{--bg:#121917;--ink:#e6efed;--sub:#93a7a3;--line:#2e3d3a;--accent:#6fd0b8}
-*{box-sizing:border-box}
-html,body{margin:0}
-body{min-height:100dvh;background:var(--bg);color:var(--ink);font-family:"Zen Kaku Gothic New","Hiragino Sans","Yu Gothic",sans-serif;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;padding:16px;text-align:center}
-.subject{font-size:clamp(1.8rem,8vw,3rem);font-weight:700;color:var(--accent);margin:0}
-.time{font-size:clamp(4rem,22vw,9rem);font-weight:700;font-variant-numeric:tabular-nums;letter-spacing:-.02em;line-height:1.1}
-.btns{display:flex;gap:8px;margin-top:14px}
-button{font:inherit;border:1px solid var(--line);background:transparent;color:var(--sub);padding:10px 18px;border-radius:8px;cursor:pointer}
-button.main{background:var(--accent);border-color:var(--accent);color:var(--bg);font-weight:700;min-width:120px}
-button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
-.gauge{position:relative;width:min(78vw,320px);aspect-ratio:1}
-.gauge svg{width:100%;height:100%}
-.gauge circle{fill:none;stroke-width:12}
-.trk{stroke:var(--line)}
-.bar{stroke:var(--accent);stroke-linecap:round;stroke-dasharray:565.49;stroke-dashoffset:0;transition:stroke-dashoffset .3s linear}
-.gauge .subject{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;padding:0 28px;font-size:clamp(1.4rem,7vw,2rem)}
-@media (prefers-reduced-motion:reduce){.bar{transition:none}}
-.sub{width:100%;max-width:420px;margin-top:28px;padding-top:22px;border-top:1px solid var(--line)}
-.sub label{display:block;color:var(--sub);font-size:.9rem}
-.sub .row{display:flex;gap:8px;justify-content:center;align-items:center;margin-top:6px}
-input{font:inherit;width:90px;text-align:center;color:var(--ink);background:transparent;border:1px solid var(--line);border-radius:8px;padding:8px}
-.stime{font-size:clamp(2.6rem,13vw,4.5rem);font-weight:700;font-variant-numeric:tabular-nums;line-height:1.2;margin:6px 0}
-.stime.over{color:#c0432b}
+  :root { --bg:#10141a; --fg:#f2f5f9; --sub:#8b95a5; --accent:#ffd54a; --exam:#6fd3ff; --wait:#9be38a; }
+  * { box-sizing:border-box; }
+  html,body { height:100%; margin:0; }
+  body {
+    background:var(--bg); color:var(--fg);
+    font-family:"Hiragino Sans","Yu Gothic",system-ui,sans-serif;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    text-align:center; padding:2vmin;
+  }
+  #subject { font-size:12vmin; font-weight:700; letter-spacing:.1em; margin-bottom:2vmin; }
+  #note { font-size:5vmin; color:var(--accent); min-height:7vmin; margin-bottom:1vmin; font-weight:600; }
+  #main { display:flex; gap:6vw; justify-content:center; align-items:flex-end; flex-wrap:wrap; }
+  .cell { display:flex; flex-direction:column; align-items:center; }
+  .label { font-size:4.5vmin; color:var(--sub); margin-bottom:1vmin; }
+  .big { font-size:30vmin; font-weight:800; line-height:1; font-variant-numeric:tabular-nums; }
+  .big small { font-size:.3em; margin-left:.1em; font-weight:600; }
+  .multi .big { font-size:24vmin; }
+  .done .big, .done .label { color:#4b5563; }
+  #now { position:fixed; bottom:2vmin; right:3vmin; font-size:4vmin; color:var(--sub); font-variant-numeric:tabular-nums; }
+  body.exam #subject { color:var(--exam); }
+  body.wait #subject { color:var(--wait); }
+  body.pre .big { color:var(--accent); }
 </style>
 </head>
-<body>
-<div class="gauge" role="img" aria-label="残り時間のゲージ">
-  <svg viewBox="0 0 200 200" aria-hidden="true"><circle class="trk" cx="100" cy="100" r="90"/><circle class="bar" id="bar" cx="100" cy="100" r="90" transform="rotate(-90 100 100)"/></svg>
-  <p class="subject" id="subject"></p>
-</div>
-<div class="btns">
-  <button class="main" id="go">開始</button>
-  <button id="skip">次へ</button>
-  <button id="reset">リセット</button>
-</div>
-<section class="sub">
-  <label for="lim">課題の制限時間(分)</label>
-  <div class="row"><input id="lim" type="number" min="1" step="1" value="30" inputmode="numeric"><span>分</span></div>
-  <div class="stime" id="stime">30:00</div>
-  <div class="btns" style="justify-content:center">
-    <button class="main" id="sgo">開始</button>
-    <button id="sreset">リセット</button>
-  </div>
-</section>
+<body class="wait">
+  <div id="subject">--</div>
+  <div id="note"></div>
+  <div id="main"></div>
+  <div id="now"></div>
+
 <script>
-const STEPS=[{n:'英熟語',m:20},{n:'英語',m:180},{n:'休憩',m:30},{n:'英単語:紫',m:30},{n:'世界史 前半',m:120},{n:'世界史 後半',m:120}];
-const $=id=>document.getElementById(id);
-let idx=0,remain=STEPS[0].m*60000,endAt=0,running=false,finished=false,timer=null,ctx=null,started=false;
+// 時刻 "H:MM" → 分
+const m = s => { const [h,mi] = s.split(':').map(Number); return h*60+mi; };
 
-function fmt(ms){let s=Math.max(0,Math.ceil(ms/1000));const h=Math.floor(s/3600),m=Math.floor(s%3600/60);s%=60;
-  const p=n=>String(n).padStart(2,'0');return h?`${h}:${p(m)}:${p(s)}`:`${p(m)}:${p(s)}`}
+// type: wait=待機/休憩(現在時刻を表示), exam=試験(カウントダウン)
+// ends: 終了時刻が複数あるものは全て表示
+const SCHEDULE = [
+  { start:'9:30',  end:'10:00', name:'待機',        type:'wait' },
+  { start:'10:00', end:'11:30', name:'英語',        type:'exam', ends:['11:20','11:30'] },
+  { start:'11:30', end:'12:30', name:'昼休憩',      type:'wait' },
+  { start:'12:30', end:'14:00', name:'世界史',      type:'exam', ends:['13:30','14:00'] },
+  { start:'14:00', end:'15:00', name:'待機',        type:'wait' },
+  { start:'15:00', end:'16:00', name:'国語(その他)', type:'exam', ends:['16:00'] },
+];
+const PRE_MIN = 10; // 開始の何分前から「開始まであと」を出すか
 
-function beep(times,len){try{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();
-  for(let i=0;i<times;i++){const o=ctx.createOscillator(),g=ctx.createGain();o.frequency.value=880;o.connect(g);g.connect(ctx.destination);
-    const t=ctx.currentTime+i*(len+.15);g.gain.setValueAtTime(.2,t);g.gain.exponentialRampToValueAtTime(.001,t+len);o.start(t);o.stop(t+len)}}catch(e){}}
+// テスト用: ?t=10:55 で時刻を固定して確認できる
+function getNow() {
+  const q = new URLSearchParams(location.search).get('t');
+  if (q) { const [h,mi] = q.split(':').map(Number); return h*60+mi+0.5; }
+  const d = new Date();
+  return d.getHours()*60 + d.getMinutes() + d.getSeconds()/60;
+}
+const pad = n => String(n).padStart(2,'0');
+const clock = t => { const x = Math.floor(t); return Math.floor(x/60)+':'+pad(x%60); };
 
-function advance(){
-  idx++;
-  if(idx>=STEPS.length){finished=true;running=false;clearInterval(timer);remain=0;beep(3,.4);return}
-  beep(2,.2);
+const $ = id => document.getElementById(id);
+
+function cell(label, value, unit, cls='') {
+  return `<div class="cell ${cls}"><div class="label">${label}</div><div class="big">${value}${unit?`<small>${unit}</small>`:''}</div></div>`;
 }
 
-function tick(){
-  if(!running)return;
-  const now=Date.now();remain=endAt-now;
-  while(remain<=0&&!finished){endAt+=(idx+1<STEPS.length?STEPS[idx+1].m*60000:0);advance();if(finished)break;remain=endAt-now}
-  render();
+function render() {
+  const now = getNow();
+  let subject, note = '', html = '', mode = 'wait';
+
+  // 開始10分前（試験のみ）
+  const upcoming = SCHEDULE.find(s => s.type==='exam' && m(s.start) > now && m(s.start) - now <= PRE_MIN);
+  const cur = SCHEDULE.find(s => now >= m(s.start) && now < m(s.end));
+
+  if (upcoming) {
+    mode = 'pre';
+    subject = upcoming.name;
+    note = upcoming.start.replace(/^(\d+):/,'$1:') + ' 開始';
+    const left = Math.ceil(m(upcoming.start) - now);
+    html = cell('開始まであと', left, '分');
+  } else if (cur && cur.type==='exam') {
+    mode = 'exam';
+    subject = cur.name;
+    const multi = cur.ends.length > 1;
+    html = cur.ends.map(e => {
+      const left = Math.ceil(m(e) - now);
+      return left > 0
+        ? cell(e + ' 終了まで', left, '分')
+        : cell(e + ' 終了', '終了', '', 'done');
+    }).join('');
+    $('main').classList.toggle('multi', multi);
+  } else if (cur) {
+    subject = cur.name;
+    html = cell('現在時刻', clock(now), '');
+  } else {
+    subject = now < m(SCHEDULE[0].start) ? '試験前' : '終了';
+    html = cell('現在時刻', clock(now), '');
+  }
+
+  document.body.className = mode;
+  $('subject').textContent = subject;
+  $('note').textContent = note;
+  $('main').innerHTML = html;
+  $('main').classList.toggle('multi', mode==='exam' && SCHEDULE.find(s=>s.name===subject).ends.length>1);
+  $('now').textContent = clock(now);
 }
-
-function render(){
-  $('subject').textContent=finished?'おつかれさま':STEPS[idx].n;
-  $('bar').style.strokeDashoffset=565.49*(finished?1:1-remain/(STEPS[Math.min(idx,STEPS.length-1)].m*60000));
-  document.title=finished?'完了':(running?fmt(remain)+' '+STEPS[idx].n:'勉強タイマー');
-  $('go').textContent=running?'一時停止':(finished?'もう一度':(started?'再開':'開始'));
-}
-
-function reset(){idx=0;remain=STEPS[0].m*60000;running=false;finished=false;started=false;clearInterval(timer);render()}
-
-$('go').onclick=()=>{
-  if(finished)reset();
-  try{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();ctx.resume()}catch(e){}
-  if(running){remain=endAt-Date.now();running=false;clearInterval(timer)}
-  else{started=true;running=true;endAt=Date.now()+remain;timer=setInterval(tick,250)}
-  render();
-};
-$('skip').onclick=()=>{
-  if(finished)return;
-  const was=running;advance();
-  if(!finished){remain=STEPS[idx].m*60000;endAt=Date.now()+remain}
-  running=was&&!finished;if(!running)clearInterval(timer);render();
-};
-$('reset').onclick=reset;
 render();
-
-/* 課題用タイマー(メインとは独立) */
-let sRemain=0,sEnd=0,sRun=false,sTimer=null,sStarted=false;
-function sLoad(){const m=parseFloat($('lim').value);sRemain=(m>0?m:0)*60000;sRun=false;sStarted=false;clearInterval(sTimer);sRender()}
-function sRender(){
-  $('stime').textContent=fmt(sRemain);
-  $('stime').classList.toggle('over',sStarted&&sRemain<=0);
-  $('sgo').textContent=sRun?'一時停止':(sStarted?(sRemain>0?'再開':'もう一度'):'開始');
-}
-function sTick(){sRemain=sEnd-Date.now();if(sRemain<=0){sRemain=0;sRun=false;clearInterval(sTimer);beep(5,.3)}sRender()}
-$('sgo').onclick=()=>{
-  if(sRun){sRemain=sEnd-Date.now();sRun=false;clearInterval(sTimer);sRender();return}
-  if(!sStarted||sRemain<=0)sLoad();
-  if(sRemain<=0)return;
-  try{ctx=ctx||new (window.AudioContext||window.webkitAudioContext)();ctx.resume()}catch(e){}
-  sStarted=true;sRun=true;sEnd=Date.now()+sRemain;sTimer=setInterval(sTick,250);sRender();
-};
-$('sreset').onclick=sLoad;
-$('lim').addEventListener('input',()=>{if(!sRun)sLoad()});
-sLoad();
+setInterval(render, 1000);
 </script>
 </body>
 </html>
