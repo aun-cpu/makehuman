@@ -3,13 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#000000">
 <title>試験タイマー</title>
 <style>
-  :root { --bg:#10141a; --fg:#f2f5f9; --sub:#8b95a5; --accent:#ffd54a; --exam:#6fd3ff; --wait:#9be38a; }
+  :root { color-scheme:dark; --fg:#f2f5f9; --sub:#8b95a5; --accent:#ffd54a; --exam:#6fd3ff; --wait:#9be38a; }
   * { box-sizing:border-box; }
-  html,body { height:100%; margin:0; }
+  html,body { height:100%; margin:0; background:#000 !important; }
   body {
-    background:var(--bg); color:var(--fg);
+    color:var(--fg);
     font-family:"Hiragino Sans","Yu Gothic",system-ui,sans-serif;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     text-align:center; padding:2vmin;
@@ -23,6 +25,14 @@
   .big small { font-size:.3em; margin-left:.1em; font-weight:600; }
   .multi .big { font-size:24vmin; }
   .done .big, .done .label { color:#4b5563; }
+  #choice { margin-top:4vmin; min-height:12vmin; display:flex; flex-direction:column; align-items:center; gap:1.5vmin; }
+  #choice .q { font-size:3.8vmin; color:var(--sub); }
+  #choice .btns { display:flex; gap:3vmin; flex-wrap:wrap; justify-content:center; }
+  #choice button {
+    font:inherit; font-size:5vmin; font-weight:700; color:var(--fg); background:#000;
+    border:2px solid #444; border-radius:2vmin; padding:1.2vmin 3.5vmin;
+  }
+  #choice button.on { border-color:var(--accent); color:var(--accent); }
   #now { position:fixed; bottom:2vmin; right:3vmin; font-size:4vmin; color:var(--sub); font-variant-numeric:tabular-nums; }
   body.exam #subject { color:var(--exam); }
   body.wait #subject { color:var(--wait); }
@@ -33,14 +43,13 @@
   <div id="subject">--</div>
   <div id="note"></div>
   <div id="main"></div>
+  <div id="choice"></div>
   <div id="now"></div>
 
 <script>
-// 時刻 "H:MM" → 分
 const m = s => { const [h,mi] = s.split(':').map(Number); return h*60+mi; };
 
-// type: wait=待機/休憩(現在時刻を表示), exam=試験(カウントダウン)
-// ends: 終了時刻が複数あるものは全て表示
+// 終了時刻が複数ある試験は ends に全て記載
 const SCHEDULE = [
   { start:'9:30',  end:'10:00', name:'待機',        type:'wait' },
   { start:'10:00', end:'11:30', name:'英語',        type:'exam', ends:['11:20','11:30'] },
@@ -49,9 +58,9 @@ const SCHEDULE = [
   { start:'14:00', end:'15:00', name:'待機',        type:'wait' },
   { start:'15:00', end:'16:00', name:'国語(その他)', type:'exam', ends:['16:00'] },
 ];
-const PRE_MIN = 10; // 開始の何分前から「開始まであと」を出すか
+const PRE_MIN = 10;     // 開始の何分前から「開始まであと」を出すか
 
-// テスト用: ?t=10:55 で時刻を固定して確認できる
+// テスト用: ?t=10:55 で時刻を固定
 function getNow() {
   const q = new URLSearchParams(location.search).get('t');
   if (q) { const [h,mi] = q.split(':').map(Number); return h*60+mi+0.5; }
@@ -60,51 +69,71 @@ function getNow() {
 }
 const pad = n => String(n).padStart(2,'0');
 const clock = t => { const x = Math.floor(t); return Math.floor(x/60)+':'+pad(x%60); };
-
 const $ = id => document.getElementById(id);
+
+// 選んだ終了時刻（科目ごと）。null=両方表示
+const chosen = {};
+function choose(name, v) {
+  if (v) chosen[name] = v; else delete chosen[name];
+  render();
+}
+
+function choiceBlock(ex) {
+  if (ex.ends.length < 2) return '';
+  const sel = chosen[ex.name];
+  const btn = (v, label) =>
+    `<button data-name="${ex.name}" data-end="${v}" class="${sel===v?'on':''}">${label}</button>`;
+  return `<div class="q">終了時刻を選択</div><div class="btns">` +
+    ex.ends.map(e => btn(e, e + ' 終了')).join('') +
+    `<button data-name="${ex.name}" data-end="" class="${!sel?'on':''}">両方表示</button></div>`;
+}
 
 function cell(label, value, unit, cls='') {
   return `<div class="cell ${cls}"><div class="label">${label}</div><div class="big">${value}${unit?`<small>${unit}</small>`:''}</div></div>`;
 }
+function setHTML(el, html) { if (el._h !== html) { el.innerHTML = html; el._h = html; } }
+
+$('choice').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  choose(b.dataset.name, b.dataset.end || null);
+});
 
 function render() {
   const now = getNow();
-  let subject, note = '', html = '', mode = 'wait';
+  let subject, note = '', html = '', mode = 'wait', choiceHTML = '', multi = false;
 
-  // 開始10分前（試験のみ）
   const upcoming = SCHEDULE.find(s => s.type==='exam' && m(s.start) > now && m(s.start) - now <= PRE_MIN);
   const cur = SCHEDULE.find(s => now >= m(s.start) && now < m(s.end));
 
   if (upcoming) {
     mode = 'pre';
     subject = upcoming.name;
-    note = upcoming.start.replace(/^(\d+):/,'$1:') + ' 開始';
-    const left = Math.ceil(m(upcoming.start) - now);
-    html = cell('開始まであと', left, '分');
+    note = upcoming.start + ' 開始';
+    html = cell('開始まであと', Math.ceil(m(upcoming.start) - now), '分');
+    choiceHTML = choiceBlock(upcoming);
   } else if (cur && cur.type==='exam') {
     mode = 'exam';
     subject = cur.name;
-    const multi = cur.ends.length > 1;
-    html = cur.ends.map(e => {
+    const sel = chosen[cur.name];
+    const shown = sel && cur.ends.includes(sel) ? [sel] : cur.ends;
+    multi = shown.length > 1;
+    html = shown.map(e => {
       const left = Math.ceil(m(e) - now);
-      return left > 0
-        ? cell(e + ' 終了まで', left, '分')
-        : cell(e + ' 終了', '終了', '', 'done');
+      return left > 0 ? cell(e + ' 終了まで', left, '分') : cell(e + ' 終了', '終了', '', 'done');
     }).join('');
-    $('main').classList.toggle('multi', multi);
-  } else if (cur) {
-    subject = cur.name;
-    html = cell('現在時刻', clock(now), '');
+
+    choiceHTML = choiceBlock(cur);
   } else {
-    subject = now < m(SCHEDULE[0].start) ? '試験前' : '終了';
+    subject = cur ? cur.name : (now < m(SCHEDULE[0].start) ? '試験前' : '終了');
     html = cell('現在時刻', clock(now), '');
   }
 
   document.body.className = mode;
   $('subject').textContent = subject;
   $('note').textContent = note;
-  $('main').innerHTML = html;
-  $('main').classList.toggle('multi', mode==='exam' && SCHEDULE.find(s=>s.name===subject).ends.length>1);
+  setHTML($('main'), html);
+  $('main').classList.toggle('multi', multi);
+  setHTML($('choice'), choiceHTML);
   $('now').textContent = clock(now);
 }
 render();
